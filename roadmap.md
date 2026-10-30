@@ -1,0 +1,17 @@
+- [x] Typeset scanned and existing math throughout questions, answers, and print.
+- [x] Fix logo home navigation and photo/default avatar.
+- [x] Restrict student subjects to their level; horizontal subject filters.
+- [x] Add yellow swipeable correction workflow, saved feedback and marks /20.
+- [x] Generate clean PDFs without browser links; move mark beside answer heading.
+- [x] Add loading feedback and verify workflows and tests.
+- [x] Remove every shadow under the logo; make the login logo as big as the role-selection one; all logos bounce on tap.
+- [x] Remove the correction header progress line and counter only.
+- [x] Keep phone typing fields above the keyboard across forms and dialogs; verified simulated phone keyboard behavior and desktop guard tests.
+- [x] Fix PDF paper backgrounds, readable formatting, and question-aware page breaks; visually checked both exported pages and both native-print pages.
+- [x] Make the printer button invoke printing directly; verified clicks on desktop and phone widths, downloaded a valid two-page PDF, and tested mobile file sharing.
+- [x] Arrange intro emojis near the lettering with a separate unobstructed logo row; checked phone layout and resolved intro animation errors.
+- [x] Harden exported and printed PDF paper colors against black backgrounds; visually inspected both pages of each output.
+- [x] Give each teacher setup step welcome-tour colors; verified all four distinct colors and saved a completed teacher profile.
+- [x] Give teachers read-only sujet viewing and remove classification accuracy from the UI.
+- [x] Add linked student solutions, points, and streak pages and teacher subjects, received answers, and active students pages; preserve existing demo points/streak values.
+- [x] Verify all six dashboard links, preview isolation, global button-sound wiring, phone/desktop layouts, and student submission readback; 19 tests pass.

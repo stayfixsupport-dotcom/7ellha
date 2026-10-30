@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /teacherAllowlist/{uid} {
+      allow read: if owns(uid);
+      allow delete: if owns(uid);
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if owns(uid);
+      allow create: if owns(uid)
+        && request.resource.data.keys().hasOnly([
+          'role', 'teacherRequested', 'name', 'email', 'photo', 'teacher', 'studentLevel', 'updatedAt'
+        ])
+        && request.resource.data.role in ['teacher', 'student']
+        && request.resource.data.teacherRequested is bool;
+      allow update: if owns(uid)
+        && request.resource.data.keys().hasOnly([
+          'role', 'teacherRequested', 'name', 'email', 'photo', 'teacher', 'studentLevel', 'updatedAt'
+        ])
+        && request.resource.data.role in ['teacher', 'student']
+        && request.resource.data.teacherRequested is bool;
+      allow delete: if owns(uid);
+
+      match /drafts/{sujetId} {
+        allow read, write: if owns(uid);
+      }
+
+      match /offlineDrafts/{sujetId} {
+        allow read, write: if owns(uid);
+        match /pages/{pageId} {
+          allow read, delete: if owns(uid);
+          allow create, update: if owns(uid)
+            && request.resource.data.keys().hasOnly(['exerciseId', 'pageNumber', 'imageData'])
+            && request.resource.data.exerciseId is string
+            && request.resource.data.pageNumber is int
+            && request.resource.data.pageNumber > 0
+            && request.resource.data.imageData is string
+            && request.resource.data.imageData.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$')
+            && request.resource.data.imageData.size() <= 850000;
+        }
+      }
+
+      match /activity/{day} {
+        allow read, delete: if owns(uid);
+        allow create, update: if owns(uid)
+          && request.resource.data.keys().hasOnly(['day', 'questionIds', 'sujetIds'])
+          && request.resource.data.day == day
+          && (!('questionIds' in request.resource.data)
+            || (request.resource.data.questionIds is list && request.resource.data.questionIds.size() <= 500))
+          && (!('sujetIds' in request.resource.data)
+            || (request.resource.data.sujetIds is list && request.resource.data.sujetIds.size() <= 100));
+      }
+
+      match /corrections/{submissionId} {
+        allow read, write: if owns(uid);
+      }
+    }
+
+    match /teacherDirectory/{uid} {
+      allow read: if signedIn();
+      allow create, update: if owns(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'photo', 'levels', 'subjects'])
+        && request.resource.data.uid == uid
+        && request.resource.data.name is string
+        && (request.resource.data.photo is string || request.resource.data.photo == null)
+        && request.resource.data.levels is list
+        && request.resource.data.levels.size() <= 4
+        && request.resource.data.subjects is list
+        && request.resource.data.subjects.size() <= 10;
+      allow delete: if owns(uid);
+    }
+
+    match /sujets/{sujetId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.id == sujetId
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'creatorType', 'id', 'title', 'level', 'subject', 'teacher', 'teacherPhoto', 'fileType', 'year', 'duration', 'createdAt', 'exercises', 'sourcePageCount'])
+        && request.resource.data.keys().hasAll(['ownerUid', 'creatorType', 'id', 'title', 'level', 'subject', 'teacher', 'fileType', 'year', 'duration', 'createdAt', 'exercises'])
+        && (!('sourcePageCount' in request.resource.data)
+          || (request.resource.data.sourcePageCount is int
+            && request.resource.data.sourcePageCount > 0
+            && request.resource.data.sourcePageCount <= 40))
+        && ((request.resource.data.creatorType == 'teacher')
+          || (request.resource.data.creatorType == 'student'
+            && request.resource.data.teacher == 'من التلاميذ'
+            && request.resource.data.teacherPhoto == null));
+      allow update: if false;
+      allow delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
+
+      match /sourcePages/{pageId} {
+        function ownsSujet() {
+          return signedIn()
+            && get(/databases/$(database)/documents/sujets/$(sujetId)).data.ownerUid == request.auth.uid;
+        }
+
+        allow read: if signedIn();
+        allow create, update: if ownsSujet()
+          && request.resource.data.keys().hasOnly(['pageNumber', 'imageData'])
+          && request.resource.data.pageNumber is int
+          && request.resource.data.pageNumber > 0
+          && request.resource.data.pageNumber <= get(/databases/$(database)/documents/sujets/$(sujetId)).data.sourcePageCount
+          && request.resource.data.imageData is string
+          && request.resource.data.imageData.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$')
+          && request.resource.data.imageData.size() <= 850000;
+        allow delete: if ownsSujet();
+      }
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if signedIn()
+        && request.resource.data.studentUid == request.auth.uid
+        && !('correction' in request.resource.data)
+        && request.resource.data.teacherUid is string
+        && request.resource.data.keys().hasOnly([
+          'id', 'sujetId', 'studentUid', 'teacherUid', 'studentName', 'studentEmail',
+          'answers', 'sentAt', 'correction', 'delivery', 'offlinePageCount'
+        ])
+        && (!('delivery' in request.resource.data) || request.resource.data.delivery in ['online', 'offline'])
+        && (!('offlinePageCount' in request.resource.data)
+          || (request.resource.data.delivery == 'offline'
+            && request.resource.data.offlinePageCount is int
+            && request.resource.data.offlinePageCount > 0
+            && request.resource.data.offlinePageCount <= 30));
+      allow read: if signedIn()
+        && (resource.data.studentUid == request.auth.uid
+          || resource.data.teacherUid == request.auth.uid);
+      allow update: if signedIn()
+        && ((resource.data.studentUid == request.auth.uid
+            && !('correction' in resource.data)
+            && (resource.data.teacherUid == ''
+              || !exists(/databases/$(database)/documents/users/$(resource.data.teacherUid)/corrections/$(submissionId)))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'sentAt']))
+          || (resource.data.teacherUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['correction'])
+            && request.resource.data.correction.publishedAt is string));
+      allow delete: if signedIn()
+        && (resource.data.studentUid == request.auth.uid
+          || resource.data.teacherUid == request.auth.uid);
+
+      match /offlinePages/{pageId} {
+        function parentSubmission() {
+          return get(/databases/$(database)/documents/submissions/$(submissionId)).data;
+        }
+
+        allow read: if signedIn()
+          && (parentSubmission().studentUid == request.auth.uid
+            || parentSubmission().teacherUid == request.auth.uid);
+        allow create: if signedIn()
+          && parentSubmission().studentUid == request.auth.uid
+          && parentSubmission().delivery == 'offline'
+          && request.resource.data.studentUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['studentUid', 'exerciseId', 'pageNumber', 'imageData', 'createdAt'])
+          && request.resource.data.exerciseId is string
+          && request.resource.data.pageNumber is int
+          && request.resource.data.pageNumber > 0
+          && request.resource.data.pageNumber <= parentSubmission().offlinePageCount
+          && request.resource.data.imageData is string
+          && request.resource.data.imageData.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$')
+          && request.resource.data.createdAt is string
+          && request.resource.data.imageData.size() <= 850000;
+        allow delete: if signedIn()
+          && (parentSubmission().studentUid == request.auth.uid
+            || parentSubmission().teacherUid == request.auth.uid);
+      }
+    }
+  }
+}
